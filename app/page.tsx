@@ -2,53 +2,82 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-// Stripe決済リンクのURL（取得したURLに書き換えてください）
-const STRIPE_URL = "https://buy.stripe.com/your_stripe_link_id";
+// 各ジャンルの予備問題（API通信失敗時・初回読み込み用の絶対落ちない安全データ）
+const FALLBACK_QUIZZES: Record<string, any[]> = {
+  english: [
+    { question: "「She is ______ about her new job.」", options: ["excited", "excite", "exciting", "excitedly"], answerIndex: 0 },
+    { question: "「I am looking forward to ______ you.」", options: ["seeing", "see", "seen", "saw"], answerIndex: 0 }
+  ],
+  history: [
+    { question: "「織田信長」が倒れた本能寺の変が起きた年は？", options: ["1582年", "1600年", "1192年", "1868年"], answerIndex: 0 },
+    { question: "江戸幕府を開いた人物は誰？", options: ["徳川家康", "豊臣秀吉", "源頼朝", "足利尊氏"], answerIndex: 0 }
+  ],
+  kanji: [
+    { question: "「海獺」の正しい読み方は？", options: ["らっこ", "かわうそ", "あざらし", "じゅごん"], answerIndex: 0 },
+    { question: "「一期一会」の意味として正しいものは？", options: ["生涯に一度の出会い", "1年に一度会うこと", "友達を大切にすること", "毎日楽しく過ごすこと"], answerIndex: 0 }
+  ],
+  trivia: [
+    { question: "シャープペンシルの「シャープ」の由来は？", options: ["家電メーカーのシャープ", "尖っているから", "鋭い音から", "発明者の名前"], answerIndex: 0 },
+    { question: "キリンの首の骨の数は何本？", options: ["7本", "12本", "20本", "5本"], answerIndex: 0 }
+  ],
+  it: [
+    { question: "Webサイトの見た目を整える言語はどれ？", options: ["CSS", "HTML", "Python", "SQL"], answerIndex: 0 },
+    { question: "「CPU」の説明として最も適しているものは？", options: ["コンピュータの頭脳", "主記憶装置", "電源ユニット", "通信ケーブル"], answerIndex: 0 }
+  ],
+  math: [
+    { question: "「7 × 8 - 6」の計算結果は？", options: ["50", "52", "48", "56"], answerIndex: 0 },
+    { question: "三角形の内角の和は何度？", options: ["180度", "360度", "90度", "270度"], answerIndex: 0 }
+  ]
+};
 
 // 8bit効果音プレイヤー (Web Audio API)
 const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
   if (typeof window === 'undefined') return;
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
 
-  const now = ctx.currentTime;
-
-  if (type === 'correct') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(523.25, now); // C5
-    osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-    osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
-    gain.gain.setValueAtTime(0.15, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    osc.start(now);
-    osc.stop(now + 0.3);
-  } else if (type === 'wrong') {
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.setValueAtTime(130, now + 0.15);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-    osc.start(now);
-    osc.stop(now + 0.35);
-  } else if (type === 'heal') {
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(400, now);
-    osc.frequency.exponentialRampToValueAtTime(800, now + 0.25);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    osc.start(now);
-    osc.stop(now + 0.3);
-  } else if (type === 'ultimate') {
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(200, now);
-    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc.start(now);
-    osc.stop(now + 0.5);
+    const now = ctx.currentTime;
+    if (type === 'correct') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.08);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } else if (type === 'wrong') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.setValueAtTime(130, now + 0.15);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (type === 'heal') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } else if (type === 'ultimate') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(1000, now + 0.35);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+      osc.start(now);
+      osc.stop(now + 0.4);
+    }
+  } catch {
+    // 自動再生制限対策
   }
 };
 
@@ -75,38 +104,23 @@ export default function Home() {
   const [monsterMaxHp, setMonsterMaxHp] = useState(40);
   const [monsterName, setMonsterName] = useState('スライムドラゴン');
   const [potions, setPotions] = useState(2);
-  const [charge, setCharge] = useState(0); // 必殺技ゲージ (0〜3)
+  const [charge, setCharge] = useState(0);
 
   // クイズ状態
-  const [quiz, setQuiz] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [quiz, setQuiz] = useState<any>(FALLBACK_QUIZZES.english[0]);
+  const [loading, setLoading] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState('スライムドラゴンが現れた！');
   const [timeLeft, setTimeLeft] = useState(10);
 
-  // 買い切り判定
-  const [isPaid, setIsPaid] = useState(false);
-  const [showBuyModal, setShowBuyModal] = useState(false);
-
-  // タイマー用
   const timerRef = useRef<any>(null);
 
-  // 初期化・Stripeリダイレクト検知
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('paid') === 'true') {
-      localStorage.setItem('quiz_dungeon_paid', 'true');
-      setIsPaid(true);
-    } else {
-      const paid = localStorage.getItem('quiz_dungeon_paid') === 'true';
-      setIsPaid(paid);
-    }
     fetchNextQuiz(genre, difficulty);
   }, []);
 
-  // タイマー管理
   useEffect(() => {
-    if (loading || selectedOption !== null || showBuyModal) return;
+    if (loading || selectedOption !== null) return;
 
     setTimeLeft(10);
     clearInterval(timerRef.current);
@@ -123,7 +137,7 @@ export default function Home() {
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [quiz, loading, selectedOption, showBuyModal]);
+  }, [quiz, loading, selectedOption]);
 
   // 新しい問題を取得
   const fetchNextQuiz = async (g = genre, d = difficulty) => {
@@ -135,38 +149,42 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ genre: g, difficulty: d }),
       });
+      if (!res.ok) throw new Error('API Error');
       const data = await res.json();
-      setQuiz(data);
-      setMessage(`${data.question ? '問題が出題された！' : '敵が現れた！'}`);
-    } catch (e) {
-      console.error(e);
-      setMessage('クイズの読み込みに失敗しました');
+      if (data && data.question && Array.isArray(data.options)) {
+        setQuiz(data);
+      } else {
+        throw new Error('Invalid Data');
+      }
+    } catch {
+      // API通信時エラーのフォールバック
+      const pool = FALLBACK_QUIZZES[g] || FALLBACK_QUIZZES.english;
+      const randomQuiz = pool[Math.floor(Math.random() * pool.length)];
+      setQuiz(randomQuiz);
     } finally {
       setLoading(false);
+      setMessage('問題が出題された！');
     }
   };
 
-  // 時間切れ時の処理
   const handleTimeout = () => {
     playSE('wrong');
-    setMessage('⏰ 時間切れ！ 敵の攻撃を受けた！ (15ダメージ)');
+    setMessage('⏰ 時間切れ！ 敵の攻撃を受けた！');
     const damage = 15;
     setPlayerHp((prev) => {
       const next = prev - damage;
       if (next <= 0) handleGameOver();
       return Math.max(0, next);
     });
-    setTimeout(() => fetchNextQuiz(), 1800);
+    setTimeout(() => fetchNextQuiz(), 1500);
   };
 
-  // 解答選択
   const handleSelect = (index: number) => {
-    if (selectedOption !== null || loading) return;
+    if (selectedOption !== null || loading || !quiz) return;
     clearInterval(timerRef.current);
     setSelectedOption(index);
 
     if (index === quiz.answerIndex) {
-      // 正解
       playSE('correct');
       const damage = 20;
       setMessage(`✨ 正解！ 敵に ${damage} のダメージ！`);
@@ -174,14 +192,12 @@ export default function Home() {
 
       const nextMonsterHp = monsterHp - damage;
       if (nextMonsterHp <= 0) {
-        // 敵撃破
         handleDefeatMonster();
       } else {
         setMonsterHp(nextMonsterHp);
-        setTimeout(() => fetchNextQuiz(), 1500);
+        setTimeout(() => fetchNextQuiz(), 1200);
       }
     } else {
-      // 不正解
       playSE('wrong');
       const damage = 15;
       setMessage(`💥 不正解... 敵からの反撃！ (${damage}ダメージ)`);
@@ -190,21 +206,14 @@ export default function Home() {
         if (next <= 0) handleGameOver();
         return Math.max(0, next);
       });
-      setTimeout(() => fetchNextQuiz(), 1500);
+      setTimeout(() => fetchNextQuiz(), 1200);
     }
   };
 
-  // モンスター撃破処理
   const handleDefeatMonster = () => {
     const nextDefeat = defeatCount + 1;
     setDefeatCount(nextDefeat);
     if (nextDefeat > highScore) setHighScore(nextDefeat);
-
-    // 無料版のお試し制限（1撃破でロック表示）
-    if (!isPaid && nextDefeat >= 1) {
-      setShowBuyModal(true);
-      return;
-    }
 
     setMessage(`🎉 ${monsterName} を倒した！ 次の敵が現れる...`);
     setTimeout(() => {
@@ -214,12 +223,11 @@ export default function Home() {
       setMonsterMaxHp(nextMax);
       setMonsterHp(nextMax);
       fetchNextQuiz();
-    }, 1800);
+    }, 1500);
   };
 
-  // ゲームオーバー
   const handleGameOver = () => {
-    setMessage('☠️ 勇者は倒れてしまった... ゲームオーバー');
+    setMessage('☠️ 勇者は倒れてしまった...');
     setTimeout(() => {
       alert(`ゲームオーバー！ 撃破数: ${defeatCount}`);
       setPlayerHp(100);
@@ -232,7 +240,6 @@ export default function Home() {
     }, 1000);
   };
 
-  // ポーション使用
   const handleUsePotion = () => {
     if (potions <= 0 || playerHp >= 100) return;
     playSE('heal');
@@ -241,13 +248,12 @@ export default function Home() {
     setMessage('🧪 ポーションを使った！ HPが40回復！');
   };
 
-  // 必殺技発動
   const handleUltimate = () => {
     if (charge < 3 || loading) return;
     playSE('ultimate');
     setCharge(0);
     const damage = 50;
-    setMessage(`⚡ 必殺アルティメットスラッシュ！ 敵に ${damage} の大ダメージ！`);
+    setMessage(`⚡ 必殺アルティメットスラッシュ！ 50ダメージ！`);
 
     const nextMonsterHp = monsterHp - damage;
     if (nextMonsterHp <= 0) {
@@ -257,104 +263,118 @@ export default function Home() {
     }
   };
 
-  // ジャンル変更
   const handleGenreChange = (gId: string) => {
     setGenre(gId);
     fetchNextQuiz(gId, difficulty);
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 font-sans">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+    <main style={{ minHeight: '100vh', backgroundColor: '#020617', color: '#fff', padding: '16px', fontFamily: 'sans-serif', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px', boxSizing: 'border-box', position: 'relative' }}>
         
-        {/* ヘッダー / タイトル */}
-        <div className="flex justify-between items-center mb-3">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500 bg-clip-text text-transparent">
+        {/* ヘッダー */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h1 style={{ fontSize: '18px', margin: 0, fontWeight: 'bold', color: '#fbbf24' }}>
             ⚔️ クイズダンジョン Ultimate
           </h1>
-          <div className="text-xs text-slate-400">
-            撃破数: <span className="text-yellow-400 font-bold">{defeatCount}</span> (最高:{highScore})
-          </div>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+            撃破数: <strong style={{ color: '#fbbf24' }}>{defeatCount}</strong>
+          </span>
         </div>
 
         {/* ジャンル選択タブ */}
-        <div className="grid grid-cols-3 gap-1.5 mb-4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '14px' }}>
           {GENRES.map((g) => (
             <button
               key={g.id}
               onClick={() => handleGenreChange(g.id)}
-              className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                genre === g.id
-                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              }`}
+              style={{
+                padding: '6px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: genre === g.id ? '#f59e0b' : '#1e293b',
+                color: genre === g.id ? '#000' : '#cbd5e1',
+                cursor: 'pointer'
+              }}
             >
               {g.label}
             </button>
           ))}
         </div>
 
-        {/* 難易度選択 */}
-        <div className="flex justify-center gap-2 mb-4">
+        {/* 難易度 */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '14px' }}>
           {['EASY', 'NORMAL', 'HARD'].map((d) => (
             <button
               key={d}
-              onClick={() => {
-                setDifficulty(d);
-                fetchNextQuiz(genre, d);
+              onClick={() => { setDifficulty(d); fetchNextQuiz(genre, d); }}
+              style={{
+                padding: '4px 12px',
+                fontSize: '11px',
+                borderRadius: '12px',
+                border: '1px solid #334155',
+                backgroundColor: difficulty === d ? '#0891b2' : 'transparent',
+                color: '#fff',
+                cursor: 'pointer'
               }}
-              className={`px-3 py-1 text-xs rounded-full border transition ${
-                difficulty === d
-                  ? 'border-cyan-400 bg-cyan-950 text-cyan-300'
-                  : 'border-slate-700 text-slate-400'
-              }`}
             >
               {d}
             </button>
           ))}
         </div>
 
-        {/* モンスターエリア */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center mb-4 relative">
-          <div className="text-5xl mb-2 animate-bounce">🐲</div>
-          <div className="font-bold text-red-400 mb-1">{monsterName}</div>
-          <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden mb-1">
-            <div
-              className="bg-red-500 h-full transition-all duration-300"
-              style={{ width: `${Math.max(0, (monsterHp / monsterMaxHp) * 100)}%` }}
-            />
+        {/* モンスター表示 */}
+        <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '12px', textAlign: 'center', marginBottom: '14px' }}>
+          <div style={{ fontSize: '40px' }}>🐲</div>
+          <div style={{ fontWeight: 'bold', color: '#f87171', fontSize: '14px', marginBottom: '4px' }}>{monsterName}</div>
+          <div style={{ width: '100%', backgroundColor: '#334155', height: '8px', borderRadius: '4px', overflow: 'hidden', marginBottom: '4px' }}>
+            <div style={{ width: `${Math.max(0, (monsterHp / monsterMaxHp) * 100)}%`, backgroundColor: '#ef4444', height: '100%', transition: 'all 0.3s' }} />
           </div>
-          <div className="text-xs text-slate-400">
-            HP: {Math.max(0, monsterHp)} / {monsterMaxHp}
-          </div>
+          <div style={{ fontSize: '11px', color: '#94a3b8' }}>HP: {Math.max(0, monsterHp)} / {monsterMaxHp}</div>
         </div>
 
-        {/* プレイヤーエリア */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-4">
-          <div className="flex justify-between items-center text-xs mb-1">
-            <span className="font-bold text-emerald-400">🛡️ 勇者 (あなた)</span>
-            <span className="text-slate-400">HP: {playerHp} / 100</span>
+        {/* 勇者ステータス & コマンド */}
+        <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '12px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+            <span style={{ fontWeight: 'bold', color: '#34d399' }}>🛡️ 勇者</span>
+            <span style={{ color: '#94a3b8' }}>HP: {playerHp} / 100</span>
           </div>
-          <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden mb-3">
-            <div
-              className="bg-emerald-500 h-full transition-all duration-300"
-              style={{ width: `${playerHp}%` }}
-            />
+          <div style={{ width: '100%', backgroundColor: '#334155', height: '8px', borderRadius: '4px', overflow: 'hidden', marginBottom: '10px' }}>
+            <div style={{ width: `${playerHp}%`, backgroundColor: '#10b981', height: '100%', transition: 'all 0.3s' }} />
           </div>
 
-          {/* コマンドボタン (ポーション & 必殺技) */}
-          <div className="grid grid-cols-2 gap-2">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <button
               onClick={handleUsePotion}
               disabled={potions <= 0 || playerHp >= 100}
-              className="bg-emerald-900/40 hover:bg-emerald-900/70 border border-emerald-600/50 text-emerald-300 py-1.5 rounded-lg text-xs font-bold disabled:opacity-40 transition"
+              style={{
+                padding: '6px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: potions > 0 && playerHp < 100 ? '#059669' : '#334155',
+                color: '#fff',
+                cursor: 'pointer'
+              }}
             >
               🧪 ポーション ({potions})
             </button>
             <button
               onClick={handleUltimate}
               disabled={charge < 3}
-              className="bg-purple-900/40 hover:bg-purple-900/70 border border-purple-500/50 text-purple-300 py-1.5 rounded-lg text-xs font-bold disabled:opacity-40 transition"
+              style={{
+                padding: '6px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: charge >= 3 ? '#9333ea' : '#334155',
+                color: '#fff',
+                cursor: 'pointer'
+              }}
             >
               ⚡ 必殺技 ({charge}/3)
             </button>
@@ -362,42 +382,45 @@ export default function Home() {
         </div>
 
         {/* メッセージ ＆ タイマー */}
-        <div className="text-center text-xs text-amber-300 mb-3 h-5 font-medium">
+        <div style={{ textAlign: 'center', fontSize: '12px', color: '#fde047', marginBottom: '8px', minHeight: '18px' }}>
           {message}
         </div>
-        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
-          <div
-            className="bg-cyan-400 h-full transition-all duration-1000"
-            style={{ width: `${(timeLeft / 10) * 100}%` }}
-          />
+        <div style={{ width: '100%', backgroundColor: '#334155', height: '4px', borderRadius: '2px', overflow: 'hidden', marginBottom: '14px' }}>
+          <div style={{ width: `${(timeLeft / 10) * 100}%`, backgroundColor: '#38bdf8', height: '100%', transition: 'all 1s linear' }} />
         </div>
 
-        {/* クイズ問題カード */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+        {/* クイズ表示 */}
+        <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '14px' }}>
           {loading ? (
-            <div className="text-center py-8 text-slate-500 animate-pulse text-sm">
-              🧙‍♂️ AIが試練（問題）を召喚中...
-            </div>
+            <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '13px' }}>🧙‍♂️ クイズを解読中...</div>
           ) : (
             <>
-              <div className="font-semibold text-sm mb-4 text-slate-200 min-h-[48px]">
+              <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '12px', lineHeight: '1.4' }}>
                 {quiz?.question}
               </div>
-
-              <div className="space-y-2">
-                {quiz?.options.map((opt: string, idx: number) => {
-                  let btnColor = 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200';
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {quiz?.options?.map((opt: string, idx: number) => {
+                  let bgColor = '#1e293b';
                   if (selectedOption !== null) {
-                    if (idx === quiz.answerIndex) btnColor = 'bg-emerald-600 border-emerald-500 text-white';
-                    else if (idx === selectedOption) btnColor = 'bg-rose-600 border-rose-500 text-white';
+                    if (idx === quiz.answerIndex) bgColor = '#059669';
+                    else if (idx === selectedOption) bgColor = '#dc2626';
                   }
-
                   return (
                     <button
                       key={idx}
                       onClick={() => handleSelect(idx)}
                       disabled={selectedOption !== null}
-                      className={`w-full text-left p-3 rounded-lg border text-xs font-medium transition-all ${btnColor}`}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        textAlign: 'left',
+                        fontSize: '13px',
+                        backgroundColor: bgColor,
+                        color: '#fff',
+                        border: '1px solid #475569',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
                     >
                       {idx + 1}. {opt}
                     </button>
@@ -407,33 +430,6 @@ export default function Home() {
             </>
           )}
         </div>
-
-        {/* 1200円 買い切り購入ロックモーダル */}
-        {showBuyModal && (
-          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
-            <div className="text-4xl mb-3">👑</div>
-            <h2 className="text-lg font-bold text-yellow-400 mb-2">無料お試しプレイ終了！</h2>
-            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
-              1,200円（買い切り）で全てのジャンル（英語・歴史・漢字・雑学・IT・算数）が無制限プレイ可能になります！
-            </p>
-            <a
-              href={STRIPE_URL}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold rounded-xl shadow-lg hover:brightness-110 transition block text-sm"
-            >
-              全機能解放（1,200円）
-            </a>
-            <button
-              onClick={() => {
-                setShowBuyModal(false);
-                setDefeatCount(0);
-                setMonsterHp(40);
-              }}
-              className="mt-4 text-xs text-slate-500 underline"
-            >
-              最初からもう一度お試し
-            </button>
-          </div>
-        )}
 
       </div>
     </main>
