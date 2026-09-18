@@ -1,11 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { genre, difficulty, userApiKey } = body || {};
+    const genre = body?.genre || 'english';
+    const difficulty = body?.difficulty || 'NORMAL';
+    const userApiKey = body?.userApiKey || '';
 
     const apiKey = userApiKey || process.env.GEMINI_API_KEY;
 
@@ -17,8 +19,8 @@ export async function POST(req: Request) {
 以下の条件に従って、クイズを1問作成し、指定のJSON形式のみで出力してください。
 
 【条件】
-- ジャンル: ${genre || 'english'}
-- 難易度: ${difficulty || 'NORMAL'}
+- ジャンル: ${genre}
+- 難易度: ${difficulty}
 - 4択クイズ（選択肢は4つ）
 - 正解のインデックスは 0, 1, 2, 3 のいずれか
 
