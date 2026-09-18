@@ -52,7 +52,7 @@ export default function Home() {
         </div>
 
         {/* メッセージ */}
-        <div style={{ backgroundColor: '#020617', padding: '12px', borderRadius: '8px', marginBottom: '12px', textAlign: 'center', minHeight: '50px', fontSize: '14px', display: 'flex', itemsCenter: 'center', justifyContent: 'center' }}>
+        <div style={{ backgroundColor: '#020617', padding: '12px', borderRadius: '8px', marginBottom: '12px', textAlign: 'center', minHeight: '50px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {message}
         </div>
 
@@ -85,4 +85,3 @@ export default function Home() {
     </main>
   );
 }
-
