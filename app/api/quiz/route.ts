@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 
+interface QuizResponse {
+  question: string;
+  options: string[];
+  answerIndex: number;
+}
+
 export async function POST(req: Request) {
   try {
-    const { genre, difficulty, userApiKey } = await req.json();
+    const body = await req.json();
+    const { genre, difficulty, userApiKey } = body;
 
-    // 優先順位: 画面で入力されたキー ＞ Vercelの環境変数 GEMINI_API_KEY
     const apiKey = userApiKey || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -12,11 +18,11 @@ export async function POST(req: Request) {
     }
 
     const prompt = `あなたはクイズRPGゲームの出題AIです。
-以下の条件に従って、クイズを1問作成し、指定のJSON形式のみで出力してください。Markdownの枠組み (\`\`\`json 等) や解説テキストは一切出力しないでください。
+以下の条件に従って、クイズを1問作成し、指定のJSON形式のみで出力してください。
 
 【条件】
-- ジャンル: ${genre}
-- 難易度: ${difficulty}
+- ジャンル: ${genre || 'english'}
+- 難易度: ${difficulty || 'NORMAL'}
 - 4択クイズ（選択肢は4つ）
 - 正解のインデックスは 0, 1, 2, 3 のいずれか
 
@@ -37,8 +43,6 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API Error:', errorText);
       return NextResponse.json({ error: 'Gemini API Error' }, { status: 500 });
     }
 
@@ -46,11 +50,10 @@ export async function POST(req: Request) {
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
-      return NextResponse.json({ error: 'Empty response from Gemini' }, { status: 500 });
+      return NextResponse.json({ error: 'Empty response' }, { status: 500 });
     }
 
-    // JSONをパース
-    const quizData = JSON.parse(rawText.trim());
+    const quizData: QuizResponse = JSON.parse(rawText.trim());
 
     return NextResponse.json(quizData);
   } catch (error) {
