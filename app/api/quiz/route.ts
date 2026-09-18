@@ -2,67 +2,59 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { genre = 'english', difficulty = 'NORMAL' } = await req.json();
+    const { genre, difficulty, userApiKey } = await req.json();
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    // 優先順位: 画面で入力されたキー ＞ Vercelの環境変数 GEMINI_API_KEY
+    const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+
     if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
+      return NextResponse.json({ error: 'APIキーが設定されていません' }, { status: 400 });
     }
 
-    const genrePrompts: Record<string, string> = {
-      english: "英単語、英文法、または英会話フレーズに関する英語クイズ",
-      history: "日本史または世界史の重要な歴史的出来事・人物・年号に関する歴史クイズ",
-      kanji: "難読漢字の読み方、四字熟語、ことわざに関する漢字クイズ",
-      trivia: "日常生活、科学、自然、面白い世界常識に関する雑学クイズ",
-      it: "ITパスポート、基本情報、Web、プログラミング基礎に関するIT・PCクイズ",
-      math: "小中学生レベルの暗算、文章題、算数・数学パズルクイズ",
-    };
+    const prompt = `あなたはクイズRPGゲームの出題AIです。
+以下の条件に従って、クイズを1問作成し、指定のJSON形式のみで出力してください。Markdownの枠組み (\`\`\`json 等) や解説テキストは一切出力しないでください。
 
-    const targetGenre = genrePrompts[genre] || genrePrompts.english;
+【条件】
+- ジャンル: ${genre}
+- 難易度: ${difficulty}
+- 4択クイズ（選択肢は4つ）
+- 正解のインデックスは 0, 1, 2, 3 のいずれか
 
-    const prompt = `あなたはゲームのクイズ問題作成エンジンです。
-以下の条件に従って、4択クイズを1問作成してください。
+【出力フォーマット】
+{"question":"問題文","options":["選択肢1","選択肢2","選択肢3","選択肢4"],"answerIndex":0}`;
 
-【ジャンル】: ${targetGenre}
-【難易度】: ${difficulty}
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-【絶対条件】
-1. 正解は options の中に必ず1つだけ含めてください。
-2. answerIndex は 0, 1, 2, 3 のいずれかの数値にしてください。
-3. 余計な解説や文字は一切出力せず、以下のJSONフォーマットのみを出力してください。
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          response_mime_type: 'application/json',
+        },
+      }),
+    });
 
-{
-  "question": "問題文",
-  "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
-  "answerIndex": 0
-}`;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      }
-    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini API Error:', errorText);
+      return NextResponse.json({ error: 'Gemini API Error' }, { status: 500 });
+    }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
-    // JSON文字列の抽出・整形
-    const cleanJson = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-    const quizData = JSON.parse(cleanJson);
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!rawText) {
+      return NextResponse.json({ error: 'Empty response from Gemini' }, { status: 500 });
+    }
+
+    // JSONをパース
+    const quizData = JSON.parse(rawText.trim());
 
     return NextResponse.json(quizData);
   } catch (error) {
-    console.error('Quiz Generation Error:', error);
-    // フォールバック問題
-    return NextResponse.json({
-      question: "「織田信長」が倒れた本能寺の変が起きた年は？",
-      options: ["1582年", "1600年", "1192年", "1868年"],
-      answerIndex: 0,
-    });
+    console.error('Quiz Route Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
