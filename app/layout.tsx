@@ -1,18 +1,19 @@
-export const metadata = {
-  title: '英語クイズダンジョン',
-  description: 'AI英語クイズダンジョンRPG',
-};
+import type { Metadata } from 'next'
+import './globals.css'
+
+export const metadata: Metadata = {
+  title: 'クイズダンジョン Ultimate',
+  description: '無限に遊べるAIクイズRPG',
+}
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="ja">
-      <body style={{ margin: 0, padding: 0, backgroundColor: '#0f172a' }}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
-  );
+  )
 }
