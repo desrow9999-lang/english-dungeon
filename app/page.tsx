@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface QuizItem {
   question: string;
@@ -38,7 +38,8 @@ const FALLBACK_QUIZZES: Record<string, QuizItem[]> = {
 const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
   if (typeof window === 'undefined') return;
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
@@ -80,7 +81,9 @@ const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
       osc.start(now);
       osc.stop(now + 0.4);
     }
-  } catch {}
+  } catch {
+    // SE再生不可環境への対策
+  }
 };
 
 const GENRES = [
@@ -116,9 +119,10 @@ export default function Home() {
   const [message, setMessage] = useState('スライムドラゴンが現れた！');
   const [timeLeft, setTimeLeft] = useState(10);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const timerRef = useRef<any>(null);
 
-  const fetchNextQuiz = async (g = genre, d = difficulty, key = apiKey) => {
+  const fetchNextQuiz = useCallback(async (g = genre, d = difficulty, key = apiKey) => {
     setLoading(true);
     setSelectedOption(null);
     try {
@@ -142,9 +146,9 @@ export default function Home() {
       setLoading(false);
       setMessage('問題が出題された！');
     }
-  };
+  }, [genre, difficulty, apiKey]);
 
-  const handleGameOver = () => {
+  const handleGameOver = useCallback(() => {
     setMessage('☠️ 勇者は倒れてしまった...');
     setTimeout(() => {
       if (typeof window !== 'undefined') {
@@ -158,9 +162,9 @@ export default function Home() {
       setPotions(2);
       fetchNextQuiz();
     }, 1000);
-  };
+  }, [defeatCount, fetchNextQuiz]);
 
-  const handleDefeatMonster = () => {
+  const handleDefeatMonster = useCallback(() => {
     const nextDefeat = defeatCount + 1;
     setDefeatCount(nextDefeat);
 
@@ -173,9 +177,9 @@ export default function Home() {
       setMonsterHp(nextMax);
       fetchNextQuiz();
     }, 1500);
-  };
+  }, [defeatCount, monsterName, fetchNextQuiz]);
 
-  const handleTimeout = () => {
+  const handleTimeout = useCallback(() => {
     playSE('wrong');
     setMessage('⏰ 時間切れ！ 敵の攻撃を受けた！');
     const damage = 15;
@@ -185,7 +189,7 @@ export default function Home() {
       return Math.max(0, next);
     });
     setTimeout(() => fetchNextQuiz(), 1500);
-  };
+  }, [handleGameOver, fetchNextQuiz]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -194,7 +198,7 @@ export default function Home() {
       setInputKey(savedKey);
       fetchNextQuiz(genre, difficulty, savedKey);
     }
-  }, []);
+  }, [fetchNextQuiz, genre, difficulty]);
 
   useEffect(() => {
     if (loading || selectedOption !== null) return;
@@ -216,7 +220,7 @@ export default function Home() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [quiz, loading, selectedOption]);
+  }, [quiz, loading, selectedOption, handleTimeout]);
 
   const saveApiKey = () => {
     if (typeof window !== 'undefined') {
