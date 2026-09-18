@@ -19,7 +19,6 @@ export default function Home() {
   const [message, setMessage] = useState("AIモンスターが現れた！");
   const [gameState, setGameState] = useState<"playing" | "victory" | "gameover">("playing");
 
-  // 初回起動時にブラウザ保存されたキーを取得
   useEffect(() => {
     const savedKey = localStorage.getItem("user_gemini_api_key");
     if (savedKey) {
@@ -28,7 +27,6 @@ export default function Home() {
     }
   }, []);
 
-  // APIキーの保存
   const handleSaveKey = () => {
     if (!inputKey.trim()) return;
     const key = inputKey.trim();
@@ -37,51 +35,56 @@ export default function Home() {
     fetchQuiz(key);
   };
 
-  // APIキーの変更・削除
   const handleResetKey = () => {
     localStorage.removeItem("user_gemini_api_key");
     setApiKey("");
     setQuiz(null);
   };
 
-  // Gemini APIから直接クイズを取得
   const fetchQuiz = async (keyToUse: string) => {
     setLoading(true);
-    const prompt = `英語の4択クイズ（日常英会話や単語問題）を1問作成してください。
-必ず以下のJSON形式のみで出力してください。Markdown装飾や追加テキストは含めないでください。
+    setMessage("⚡ AIが高速でクイズを生成中…");
 
-{
-  "question": "問題文（例: 「She is ______ about her new job.」空欄に入る言葉は？）",
-  "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
-  "answerIndex": 0,
-  "explanation": "正解の簡潔な解説"
-}`;
+    const prompt = `英語の4択クイズ（日常会話）を1問作成。JSONのみ出力。
+{"question":"問題文","options":["選択肢1","選択肢2","選択肢3","選択肢4"],"answerIndex":0,"explanation":"解説"}`;
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト設定
+
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${keyToUse}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               responseMimeType: "application/json",
+              temperature: 0.7,
+              maxOutputTokens: 300 // 出力文字数を最小限にして高速化
             },
           }),
         }
       );
 
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
-        throw new Error("API Key Error");
+        throw new Error("APIキーエラーまたは通信失敗");
       }
 
       const data = await res.json();
       const generatedQuiz = JSON.parse(data.candidates[0].content.parts[0].text);
       setQuiz(generatedQuiz);
       setMessage("AIモンスターが現れた！");
-    } catch {
-      setMessage("❌ クイズ生成に失敗しました。APIキーが正しいか確認してください。");
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setMessage("⚠️ 応答時間が長すぎました。もう一度お試しください。");
+      } else {
+        setMessage("❌ 通信エラー。APIキーが無効か上限に達しています。");
+      }
     } finally {
       setLoading(false);
     }
@@ -100,7 +103,7 @@ export default function Home() {
         return;
       }
 
-      setMessage("⭕️ 正解！モンスターに15ダメージ！次の問題を生成中…");
+      setMessage("⭕️ 正解！15ダメージ！次問題を生成中…");
       fetchQuiz(apiKey);
     } else {
       const nextPlayerHp = Math.max(0, playerHp - 25);
@@ -124,19 +127,18 @@ export default function Home() {
     fetchQuiz(apiKey);
   };
 
-  // APIキー未設定時の設定画面
   if (!apiKey) {
     return (
       <main style={{ minHeight: '100vh', backgroundColor: '#0f172a', color: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
         <div style={{ maxWidth: '400px', margin: '40px auto', backgroundColor: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
           <h1 style={{ textAlign: 'center', color: '#fbbf24', fontSize: '18px', marginBottom: '16px' }}>🔑 Gemini APIキーの設定</h1>
           <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px', lineHeight: '1.5' }}>
-            遊ぶために個人のGemini APIキーが必要です。<br />
-            入力したキーはスマホのブラウザ内にのみ保存されます。
+            個人のGemini APIキーを入力してください。<br />
+            キーはブラウザ内にのみ保存されます。
           </p>
           <input
             type="password"
-            placeholder="AI Studioで取得したAPIキーを入力"
+            placeholder="APIキーを入力"
             value={inputKey}
             onChange={(e) => setInputKey(e.target.value)}
             style={{
@@ -212,11 +214,11 @@ export default function Home() {
           {message}
         </div>
 
-        {/* ゲーム進行中：クイズ問題と選択肢 */}
+        {/* ゲーム進行中 */}
         {gameState === "playing" && (
           <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #334155' }}>
             {loading ? (
-              <p style={{ textAlign: 'center', color: '#94a3b8' }}>🤖 AIが問題を作成中…</p>
+              <p style={{ textAlign: 'center', color: '#94a3b8' }}>⚡ AIが高速生成中…</p>
             ) : quiz ? (
               <>
                 <p style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '12px', textAlign: 'center' }}>{quiz.question}</p>
@@ -242,11 +244,18 @@ export default function Home() {
                   ))}
                 </div>
               </>
-            ) : null}
+            ) : (
+              <button
+                onClick={() => fetchQuiz(apiKey)}
+                style={{ width: '100%', padding: '12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                🔄 再読み込み
+              </button>
+            )}
           </div>
         )}
 
-        {/* 勝利・敗北時：再挑戦ボタン */}
+        {/* 勝利・敗北時 */}
         {gameState !== "playing" && (
           <button
             onClick={handleReset}
