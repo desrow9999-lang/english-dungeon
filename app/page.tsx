@@ -100,7 +100,7 @@ const QUIZ_DATABASE: Record<Level, Quiz[]> = {
       question: "「______ for your advice, I would have failed.」",
       options: ["Had it not been", "If it were not", "Were it not", "If not"],
       answerIndex: 0,
-      explanation: "「Had it not been for ～」は「もし～がなかったら」の仮定法過去完了倒影形です。"
+      explanation: "「Had it not been for ～」は「もし～がなかったら」の仮定法過去完了倒置形です。"
     }
   ]
 };
@@ -168,7 +168,7 @@ export default function Home() {
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${keyToUse}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${keyToUse}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
