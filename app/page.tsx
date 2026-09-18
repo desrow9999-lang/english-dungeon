@@ -1,58 +1,109 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const QUIZ_LIST = [
-  {
-    question: "「She is ______ about her new job.」空欄に入る言葉は？",
-    options: ["excited", "excite", "excitingly", "excitement"],
-    answerIndex: 0,
-    explanation: "'be excited about 〜' で「〜にわくわくしている」という意味です。"
-  },
-  {
-    question: "「I need to ______ my homework before dinner.」空欄に入る言葉は？",
-    options: ["finish", "finishing", "finished", "finishes"],
-    answerIndex: 0,
-    explanation: "助動詞 'need to' の直後は動詞の原形 (finish) が来ます。"
-  },
-  {
-    question: "「He goes to the gym ______ a week.」空欄に入る言葉は？",
-    options: ["twice", "two", "second", "double"],
-    answerIndex: 0,
-    explanation: "「週に2回」は 'twice a week' と表現します。"
-  }
-];
+type Quiz = {
+  question: string;
+  options: string[];
+  answerIndex: number;
+  explanation: string;
+};
 
 export default function Home() {
-  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
-  const [enemyHp, setEnemyHp] = useState(30);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [inputKey, setInputKey] = useState<string>("");
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [enemyHp, setEnemyHp] = useState(50);
   const [playerHp, setPlayerHp] = useState(100);
-  const [message, setMessage] = useState("モンスターが現れた！");
+  const [message, setMessage] = useState("AIモンスターが現れた！");
   const [gameState, setGameState] = useState<"playing" | "victory" | "gameover">("playing");
 
-  const quiz = QUIZ_LIST[currentQuizIndex];
+  // 初回起動時にブラウザ保存されたキーを取得
+  useEffect(() => {
+    const savedKey = localStorage.getItem("user_gemini_api_key");
+    if (savedKey) {
+      setApiKey(savedKey);
+      fetchQuiz(savedKey);
+    }
+  }, []);
+
+  // APIキーの保存
+  const handleSaveKey = () => {
+    if (!inputKey.trim()) return;
+    const key = inputKey.trim();
+    localStorage.setItem("user_gemini_api_key", key);
+    setApiKey(key);
+    fetchQuiz(key);
+  };
+
+  // APIキーの変更・削除
+  const handleResetKey = () => {
+    localStorage.removeItem("user_gemini_api_key");
+    setApiKey("");
+    setQuiz(null);
+  };
+
+  // Gemini APIから直接クイズを取得
+  const fetchQuiz = async (keyToUse: string) => {
+    setLoading(true);
+    const prompt = `英語の4択クイズ（日常英会話や単語問題）を1問作成してください。
+必ず以下のJSON形式のみで出力してください。Markdown装飾や追加テキストは含めないでください。
+
+{
+  "question": "問題文（例: 「She is ______ about her new job.」空欄に入る言葉は？）",
+  "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+  "answerIndex": 0,
+  "explanation": "正解の簡潔な解説"
+}`;
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${keyToUse}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+            },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("API Key Error");
+      }
+
+      const data = await res.json();
+      const generatedQuiz = JSON.parse(data.candidates[0].content.parts[0].text);
+      setQuiz(generatedQuiz);
+      setMessage("AIモンスターが現れた！");
+    } catch {
+      setMessage("❌ クイズ生成に失敗しました。APIキーが正しいか確認してください。");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAnswer = (index: number) => {
-    if (gameState !== "playing") return;
+    if (gameState !== "playing" || !quiz) return;
 
     if (index === quiz.answerIndex) {
-      const nextEnemyHp = Math.max(0, enemyHp - 10);
+      const nextEnemyHp = Math.max(0, enemyHp - 15);
       setEnemyHp(nextEnemyHp);
 
       if (nextEnemyHp <= 0) {
         setGameState("victory");
-        setMessage("🎉 モンスターを倒した！ダンジョンクリア！");
+        setMessage("🎉 AIドラゴンを倒した！ダンジョンクリア！");
         return;
       }
 
-      setMessage("⭕️ 正解！モンスターに10ダメージを与えた！");
-      if (currentQuizIndex < QUIZ_LIST.length - 1) {
-        setCurrentQuizIndex((prev) => prev + 1);
-      } else {
-        setCurrentQuizIndex(0);
-      }
+      setMessage("⭕️ 正解！モンスターに15ダメージ！次の問題を生成中…");
+      fetchQuiz(apiKey);
     } else {
-      const nextPlayerHp = Math.max(0, playerHp - 20);
+      const nextPlayerHp = Math.max(0, playerHp - 25);
       setPlayerHp(nextPlayerHp);
 
       if (nextPlayerHp <= 0) {
@@ -66,26 +117,82 @@ export default function Home() {
   };
 
   const handleReset = () => {
-    setEnemyHp(30);
+    setEnemyHp(50);
     setPlayerHp(100);
-    setCurrentQuizIndex(0);
     setGameState("playing");
-    setMessage("モンスターが現れた！");
+    setMessage("新たなAIモンスターが現れた！");
+    fetchQuiz(apiKey);
   };
+
+  // APIキー未設定時の設定画面
+  if (!apiKey) {
+    return (
+      <main style={{ minHeight: '100vh', backgroundColor: '#0f172a', color: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
+        <div style={{ maxWidth: '400px', margin: '40px auto', backgroundColor: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
+          <h1 style={{ textAlign: 'center', color: '#fbbf24', fontSize: '18px', marginBottom: '16px' }}>🔑 Gemini APIキーの設定</h1>
+          <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px', lineHeight: '1.5' }}>
+            遊ぶために個人のGemini APIキーが必要です。<br />
+            入力したキーはスマホのブラウザ内にのみ保存されます。
+          </p>
+          <input
+            type="password"
+            placeholder="AI Studioで取得したAPIキーを入力"
+            value={inputKey}
+            onChange={(e) => setInputKey(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '1px solid #475569',
+              backgroundColor: '#0f172a',
+              color: '#fff',
+              fontSize: '14px',
+              marginBottom: '12px',
+              boxSizing: 'border-box'
+            }}
+          />
+          <button
+            onClick={handleSaveKey}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              fontSize: '15px',
+              cursor: 'pointer'
+            }}
+          >
+            設定してゲームを開始
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main style={{ minHeight: '100vh', backgroundColor: '#0f172a', color: '#fff', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ maxWidth: '400px', margin: '0 auto', backgroundColor: '#1e293b', padding: '16px', borderRadius: '12px', border: '1px solid #334155' }}>
-        <h1 style={{ textAlign: 'center', color: '#fbbf24', fontSize: '18px', marginBottom: '16px' }}>⚔️ 英語クイズダンジョン ⚔️</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h1 style={{ color: '#fbbf24', fontSize: '16px', margin: 0 }}>⚔️ AI英語ダンジョン ⚔️</h1>
+          <button
+            onClick={handleResetKey}
+            style={{ backgroundColor: 'transparent', border: 'none', color: '#94a3b8', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
+          >
+            🔑 キー変更
+          </button>
+        </div>
         
         {/* 敵ステータス */}
         <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', marginBottom: '12px', border: '1px solid #881337' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '6px' }}>
-            <span style={{ fontWeight: 'bold', color: '#fb7185' }}>👾 ゴブリンイングリッシュ</span>
-            <span>HP: {enemyHp} / 30</span>
+            <span style={{ fontWeight: 'bold', color: '#fb7185' }}>👾 AIドラゴン</span>
+            <span>HP: {enemyHp} / 50</span>
           </div>
           <div style={{ width: '100%', backgroundColor: '#334155', height: '10px', borderRadius: '5px', overflow: 'hidden' }}>
-            <div style={{ width: `${(enemyHp / 30) * 100}%`, backgroundColor: '#f43f5e', height: '100%', transition: 'all 0.3s' }} />
+            <div style={{ width: `${(enemyHp / 50) * 100}%`, backgroundColor: '#f43f5e', height: '100%', transition: 'all 0.3s' }} />
           </div>
         </div>
 
@@ -108,31 +215,34 @@ export default function Home() {
         {/* ゲーム進行中：クイズ問題と選択肢 */}
         {gameState === "playing" && (
           <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #334155' }}>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px', textAlign: 'center' }}>
-              第 {currentQuizIndex + 1} 問
-            </div>
-            <p style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '12px', textAlign: 'center' }}>{quiz.question}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {quiz.options.map((option, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleAnswer(idx)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#1e293b',
-                    color: '#fff',
-                    border: '1px solid #475569',
-                    borderRadius: '6px',
-                    textAlign: 'left',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {idx + 1}. {option}
-                </button>
-              ))}
-            </div>
+            {loading ? (
+              <p style={{ textAlign: 'center', color: '#94a3b8' }}>🤖 AIが問題を作成中…</p>
+            ) : quiz ? (
+              <>
+                <p style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '12px', textAlign: 'center' }}>{quiz.question}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {quiz.options.map((option, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleAnswer(idx)}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        backgroundColor: '#1e293b',
+                        color: '#fff',
+                        border: '1px solid #475569',
+                        borderRadius: '6px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {idx + 1}. {option}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
         )}
 
