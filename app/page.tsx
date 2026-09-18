@@ -43,48 +43,39 @@ export default function Home() {
 
   const fetchQuiz = async (keyToUse: string) => {
     setLoading(true);
-    setMessage("⚡ AIが高速でクイズを生成中…");
+    setMessage("⚡ AIがクイズを生成中…");
 
     const prompt = `英語の4択クイズ（日常会話）を1問作成。JSONのみ出力。
 {"question":"問題文","options":["選択肢1","選択肢2","選択肢3","選択肢4"],"answerIndex":0,"explanation":"解説"}`;
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト設定
-
+      // 安定している gemini-1.5-flash に変更
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${keyToUse}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               responseMimeType: "application/json",
               temperature: 0.7,
-              maxOutputTokens: 300 // 出力文字数を最小限にして高速化
             },
           }),
         }
       );
 
-      clearTimeout(timeoutId);
+      const data = await res.json();
 
       if (!res.ok) {
-        throw new Error("APIキーエラーまたは通信失敗");
+        throw new Error(data.error?.message || `HTTPエラー: ${res.status}`);
       }
 
-      const data = await res.json();
       const generatedQuiz = JSON.parse(data.candidates[0].content.parts[0].text);
       setQuiz(generatedQuiz);
       setMessage("AIモンスターが現れた！");
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        setMessage("⚠️ 応答時間が長すぎました。もう一度お試しください。");
-      } else {
-        setMessage("❌ 通信エラー。APIキーが無効か上限に達しています。");
-      }
+      setMessage(`❌ エラー: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -133,12 +124,11 @@ export default function Home() {
         <div style={{ maxWidth: '400px', margin: '40px auto', backgroundColor: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
           <h1 style={{ textAlign: 'center', color: '#fbbf24', fontSize: '18px', marginBottom: '16px' }}>🔑 Gemini APIキーの設定</h1>
           <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px', lineHeight: '1.5' }}>
-            個人のGemini APIキーを入力してください。<br />
-            キーはブラウザ内にのみ保存されます。
+            Google AI Studioで取得したAPIキーを入力してください。
           </p>
           <input
             type="password"
-            placeholder="APIキーを入力"
+            placeholder="AI Studioで取得したAPIキーを入力"
             value={inputKey}
             onChange={(e) => setInputKey(e.target.value)}
             style={{
@@ -183,7 +173,7 @@ export default function Home() {
             onClick={handleResetKey}
             style={{ backgroundColor: 'transparent', border: 'none', color: '#94a3b8', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
           >
-            🔑 キー変更
+            🔑 キー再設定
           </button>
         </div>
         
@@ -209,8 +199,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* メッセージ */}
-        <div style={{ backgroundColor: '#020617', padding: '12px', borderRadius: '8px', marginBottom: '12px', textAlign: 'center', minHeight: '50px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* メッセージ表示（エラー詳細もここに出ます） */}
+        <div style={{ backgroundColor: '#020617', padding: '12px', borderRadius: '8px', marginBottom: '12px', textAlign: 'center', minHeight: '50px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: message.startsWith('❌') ? '#f87171' : '#fff' }}>
           {message}
         </div>
 
@@ -218,7 +208,7 @@ export default function Home() {
         {gameState === "playing" && (
           <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #334155' }}>
             {loading ? (
-              <p style={{ textAlign: 'center', color: '#94a3b8' }}>⚡ AIが高速生成中…</p>
+              <p style={{ textAlign: 'center', color: '#94a3b8' }}>⚡ AIが生成中…</p>
             ) : quiz ? (
               <>
                 <p style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '12px', textAlign: 'center' }}>{quiz.question}</p>
@@ -249,7 +239,7 @@ export default function Home() {
                 onClick={() => fetchQuiz(apiKey)}
                 style={{ width: '100%', padding: '12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
               >
-                🔄 再読み込み
+                🔄 再試行する
               </button>
             )}
           </div>
