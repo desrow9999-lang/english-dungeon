@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-// 各ジャンルの予備問題（API通信失敗時・初回読み込み用の絶対落ちない安全データ）
 const FALLBACK_QUIZZES: Record<string, any[]> = {
   english: [
     { question: "「She is ______ about her new job.」", options: ["excited", "excite", "exciting", "excitedly"], answerIndex: 0 },
@@ -30,7 +29,6 @@ const FALLBACK_QUIZZES: Record<string, any[]> = {
   ]
 };
 
-// 8bit効果音プレイヤー (Web Audio API)
 const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
   if (typeof window === 'undefined') return;
   try {
@@ -76,9 +74,7 @@ const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
       osc.start(now);
       osc.stop(now + 0.4);
     }
-  } catch {
-    // 自動再生制限対策
-  }
+  } catch {}
 };
 
 const GENRES = [
@@ -96,7 +92,6 @@ export default function Home() {
   const [genre, setGenre] = useState('english');
   const [difficulty, setDifficulty] = useState('NORMAL');
   const [defeatCount, setDefeatCount] = useState(0);
-  const [highScore, setHighScore] = useState(0);
 
   // ステータス
   const [playerHp, setPlayerHp] = useState(100);
@@ -105,6 +100,11 @@ export default function Home() {
   const [monsterName, setMonsterName] = useState('スライムドラゴン');
   const [potions, setPotions] = useState(2);
   const [charge, setCharge] = useState(0);
+
+  // APIキー管理
+  const [apiKey, setApiKey] = useState('');
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [inputKey, setInputKey] = useState('');
 
   // クイズ状態
   const [quiz, setQuiz] = useState<any>(FALLBACK_QUIZZES.english[0]);
@@ -116,7 +116,10 @@ export default function Home() {
   const timerRef = useRef<any>(null);
 
   useEffect(() => {
-    fetchNextQuiz(genre, difficulty);
+    const savedKey = localStorage.getItem('gemini_api_key') || '';
+    setApiKey(savedKey);
+    setInputKey(savedKey);
+    fetchNextQuiz(genre, difficulty, savedKey);
   }, []);
 
   useEffect(() => {
@@ -139,15 +142,14 @@ export default function Home() {
     return () => clearInterval(timerRef.current);
   }, [quiz, loading, selectedOption]);
 
-  // 新しい問題を取得
-  const fetchNextQuiz = async (g = genre, d = difficulty) => {
+  const fetchNextQuiz = async (g = genre, d = difficulty, key = apiKey) => {
     setLoading(true);
     setSelectedOption(null);
     try {
       const res = await fetch('/api/quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ genre: g, difficulty: d }),
+        body: JSON.stringify({ genre: g, difficulty: d, userApiKey: key }),
       });
       if (!res.ok) throw new Error('API Error');
       const data = await res.json();
@@ -157,7 +159,7 @@ export default function Home() {
         throw new Error('Invalid Data');
       }
     } catch {
-      // API通信時エラーのフォールバック
+      // 通信エラー時やAPIキー未設定時はデモ問題へ自動フォールバック
       const pool = FALLBACK_QUIZZES[g] || FALLBACK_QUIZZES.english;
       const randomQuiz = pool[Math.floor(Math.random() * pool.length)];
       setQuiz(randomQuiz);
@@ -165,6 +167,13 @@ export default function Home() {
       setLoading(false);
       setMessage('問題が出題された！');
     }
+  };
+
+  const saveApiKey = () => {
+    localStorage.setItem('gemini_api_key', inputKey.trim());
+    setApiKey(inputKey.trim());
+    setShowKeyModal(false);
+    fetchNextQuiz(genre, difficulty, inputKey.trim());
   };
 
   const handleTimeout = () => {
@@ -213,7 +222,6 @@ export default function Home() {
   const handleDefeatMonster = () => {
     const nextDefeat = defeatCount + 1;
     setDefeatCount(nextDefeat);
-    if (nextDefeat > highScore) setHighScore(nextDefeat);
 
     setMessage(`🎉 ${monsterName} を倒した！ 次の敵が現れる...`);
     setTimeout(() => {
@@ -272,15 +280,55 @@ export default function Home() {
     <main style={{ minHeight: '100vh', backgroundColor: '#020617', color: '#fff', padding: '16px', fontFamily: 'sans-serif', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px', boxSizing: 'border-box', position: 'relative' }}>
         
-        {/* ヘッダー */}
+        {/* ヘッダー ＆ キー設定ボタン */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <h1 style={{ fontSize: '18px', margin: 0, fontWeight: 'bold', color: '#fbbf24' }}>
+          <h1 style={{ fontSize: '16px', margin: 0, fontWeight: 'bold', color: '#fbbf24' }}>
             ⚔️ クイズダンジョン Ultimate
           </h1>
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-            撃破数: <strong style={{ color: '#fbbf24' }}>{defeatCount}</strong>
-          </span>
+          <button
+            onClick={() => setShowKeyModal(true)}
+            style={{
+              padding: '4px 8px',
+              fontSize: '11px',
+              backgroundColor: apiKey ? '#059669' : '#334155',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            ⚙️ {apiKey ? 'AI連動中' : 'APIキー設定'}
+          </button>
         </div>
+
+        <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px', textAlign: 'right' }}>
+          撃破数: <strong style={{ color: '#fbbf24' }}>{defeatCount}</strong>
+        </div>
+
+        {/* APIキー設定モーダル */}
+        {showKeyModal && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', zIndex: 10 }}>
+            <h3 style={{ fontSize: '16px', color: '#fbbf24', marginTop: 0 }}>🔑 Gemini APIキー設定</h3>
+            <p style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.4' }}>
+              Google AI Studioで取得したGemini APIキーを入力すると、AIが無限に新問題を出題します。
+            </p>
+            <input
+              type="password"
+              placeholder="AIzaSy..."
+              value={inputKey}
+              onChange={(e) => setInputKey(e.target.value)}
+              style={{ padding: '10px', borderRadius: '6px', border: '1px solid #475569', backgroundColor: '#0f172a', color: '#fff', fontSize: '13px', marginBottom: '12px' }}
+            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={saveApiKey} style={{ flex: 1, padding: '8px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                保存してAI有効化
+              </button>
+              <button onClick={() => setShowKeyModal(false)} style={{ padding: '8px', backgroundColor: '#475569', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ジャンル選択タブ */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '14px' }}>
@@ -392,7 +440,7 @@ export default function Home() {
         {/* クイズ表示 */}
         <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '14px' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '13px' }}>🧙‍♂️ クイズを解読中...</div>
+            <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '13px' }}>🧙‍♂️ AIが問題を錬成中...</div>
           ) : (
             <>
               <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '12px', lineHeight: '1.4' }}>
