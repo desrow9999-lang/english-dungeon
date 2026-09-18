@@ -38,9 +38,9 @@ const FALLBACK_QUIZZES: Record<string, QuizItem[]> = {
 const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
   if (typeof window === 'undefined') return;
   try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -80,9 +80,7 @@ const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
       osc.start(now);
       osc.stop(now + 0.4);
     }
-  } catch (err) {
-    console.error(err);
-  }
+  } catch {}
 };
 
 const GENRES = [
@@ -146,12 +144,36 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key') || '';
-    setApiKey(savedKey);
-    setInputKey(savedKey);
-    fetchNextQuiz(genre, difficulty, savedKey);
-  }, []);
+  const handleGameOver = () => {
+    setMessage('☠️ 勇者は倒れてしまった...');
+    setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        alert(`ゲームオーバー！ 撃破数: ${defeatCount}`);
+      }
+      setPlayerHp(100);
+      setDefeatCount(0);
+      setMonsterHp(40);
+      setMonsterMaxHp(40);
+      setCharge(0);
+      setPotions(2);
+      fetchNextQuiz();
+    }, 1000);
+  };
+
+  const handleDefeatMonster = () => {
+    const nextDefeat = defeatCount + 1;
+    setDefeatCount(nextDefeat);
+
+    setMessage(`🎉 ${monsterName} を倒した！ 次の敵が現れる...`);
+    setTimeout(() => {
+      const nextName = MONSTERS[nextDefeat % MONSTERS.length];
+      const nextMax = 40 + nextDefeat * 15;
+      setMonsterName(nextName);
+      setMonsterMaxHp(nextMax);
+      setMonsterHp(nextMax);
+      fetchNextQuiz();
+    }, 1500);
+  };
 
   const handleTimeout = () => {
     playSE('wrong');
@@ -164,6 +186,15 @@ export default function Home() {
     });
     setTimeout(() => fetchNextQuiz(), 1500);
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedKey = localStorage.getItem('gemini_api_key') || '';
+      setApiKey(savedKey);
+      setInputKey(savedKey);
+      fetchNextQuiz(genre, difficulty, savedKey);
+    }
+  }, []);
 
   useEffect(() => {
     if (loading || selectedOption !== null) return;
@@ -188,7 +219,9 @@ export default function Home() {
   }, [quiz, loading, selectedOption]);
 
   const saveApiKey = () => {
-    localStorage.setItem('gemini_api_key', inputKey.trim());
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gemini_api_key', inputKey.trim());
+    }
     setApiKey(inputKey.trim());
     setShowKeyModal(false);
     fetchNextQuiz(genre, difficulty, inputKey.trim());
@@ -223,35 +256,6 @@ export default function Home() {
       });
       setTimeout(() => fetchNextQuiz(), 1200);
     }
-  };
-
-  const handleDefeatMonster = () => {
-    const nextDefeat = defeatCount + 1;
-    setDefeatCount(nextDefeat);
-
-    setMessage(`🎉 ${monsterName} を倒した！ 次の敵が現れる...`);
-    setTimeout(() => {
-      const nextName = MONSTERS[nextDefeat % MONSTERS.length];
-      const nextMax = 40 + nextDefeat * 15;
-      setMonsterName(nextName);
-      setMonsterMaxHp(nextMax);
-      setMonsterHp(nextMax);
-      fetchNextQuiz();
-    }, 1500);
-  };
-
-  const handleGameOver = () => {
-    setMessage('☠️ 勇者は倒れてしまった...');
-    setTimeout(() => {
-      alert(`ゲームオーバー！ 撃破数: ${defeatCount}`);
-      setPlayerHp(100);
-      setDefeatCount(0);
-      setMonsterHp(40);
-      setMonsterMaxHp(40);
-      setCharge(0);
-      setPotions(2);
-      fetchNextQuiz();
-    }, 1000);
   };
 
   const handleUsePotion = () => {
