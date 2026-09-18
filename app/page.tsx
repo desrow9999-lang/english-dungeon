@@ -2,39 +2,45 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-const FALLBACK_QUIZZES: Record<string, any[]> = {
+interface QuizItem {
+  question: string;
+  options: string[];
+  answerIndex: number;
+}
+
+const FALLBACK_QUIZZES: Record<string, QuizItem[]> = {
   english: [
-    { question: "「She is ______ about her new job.」", options: ["excited", "excite", "exciting", "excitedly"], answerIndex: 0 },
-    { question: "「I am looking forward to ______ you.」", options: ["seeing", "see", "seen", "saw"], answerIndex: 0 }
+    { question: '「She is ______ about her new job.」', options: ['excited', 'excite', 'exciting', 'excitedly'], answerIndex: 0 },
+    { question: '「I am looking forward to ______ you.」', options: ['seeing', 'see', 'seen', 'saw'], answerIndex: 0 }
   ],
   history: [
-    { question: "「織田信長」が倒れた本能寺の変が起きた年は？", options: ["1582年", "1600年", "1192年", "1868年"], answerIndex: 0 },
-    { question: "江戸幕府を開いた人物は誰？", options: ["徳川家康", "豊臣秀吉", "源頼朝", "足利尊氏"], answerIndex: 0 }
+    { question: '「織田信長」が倒れた本能寺の変が起きた年は？', options: ['1582年', '1600年', '1192年', '1868年'], answerIndex: 0 },
+    { question: '江戸幕府を開いた人物は誰？', options: ['徳川家康', '豊臣秀吉', '源頼朝', '足利尊氏'], answerIndex: 0 }
   ],
   kanji: [
-    { question: "「海獺」の正しい読み方は？", options: ["らっこ", "かわうそ", "あざらし", "じゅごん"], answerIndex: 0 },
-    { question: "「一期一会」の意味として正しいものは？", options: ["生涯に一度の出会い", "1年に一度会うこと", "友達を大切にすること", "毎日楽しく過ごすこと"], answerIndex: 0 }
+    { question: '「海獺」の正しい読み方は？', options: ['らっこ', 'かわうそ', 'あざらし', 'じゅごん'], answerIndex: 0 },
+    { question: '「一期一会」の意味として正しいものは？', options: ['生涯に一度の出会い', '1年に一度会うこと', '友達を大切にすること', '毎日楽しく過ごすこと'], answerIndex: 0 }
   ],
   trivia: [
-    { question: "シャープペンシルの「シャープ」の由来は？", options: ["家電メーカーのシャープ", "尖っているから", "鋭い音から", "発明者の名前"], answerIndex: 0 },
-    { question: "キリンの首の骨の数は何本？", options: ["7本", "12本", "20本", "5本"], answerIndex: 0 }
+    { question: 'シャープペンシルの「シャープ」の由来は？', options: ['家電メーカーのシャープ', '尖っているから', '鋭い音から', '発明者の名前'], answerIndex: 0 },
+    { question: 'キリンの首の骨の数は何本？', options: ['7本', '12本', '20本', '5本'], answerIndex: 0 }
   ],
   it: [
-    { question: "Webサイトの見た目を整える言語はどれ？", options: ["CSS", "HTML", "Python", "SQL"], answerIndex: 0 },
-    { question: "「CPU」の説明として最も適しているものは？", options: ["コンピュータの頭脳", "主記憶装置", "電源ユニット", "通信ケーブル"], answerIndex: 0 }
+    { question: 'Webサイトの見た目を整える言語はどれ？', options: ['CSS', 'HTML', 'Python', 'SQL'], answerIndex: 0 },
+    { question: '「CPU」の説明として最も適しているものは？', options: ['コンピュータの頭脳', '主記憶装置', '電源ユニット', '通信ケーブル'], answerIndex: 0 }
   ],
   math: [
-    { question: "「7 × 8 - 6」の計算結果は？", options: ["50", "52", "48", "56"], answerIndex: 0 },
-    { question: "三角形の内角の和は何度？", options: ["180度", "360度", "90度", "270度"], answerIndex: 0 }
+    { question: '「7 × 8 - 6」の計算結果は？', options: ['50', '52', '48', '56'], answerIndex: 0 },
+    { question: '三角形の内角の和は何度？', options: ['180度', '360度', '90度', '270度'], answerIndex: 0 }
   ]
 };
 
 const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
   if (typeof window === 'undefined') return;
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -74,7 +80,9 @@ const playSE = (type: 'correct' | 'wrong' | 'heal' | 'ultimate') => {
       osc.start(now);
       osc.stop(now + 0.4);
     }
-  } catch {}
+  } catch (err) {
+    console.error(err);
+  }
 };
 
 const GENRES = [
@@ -93,7 +101,6 @@ export default function Home() {
   const [difficulty, setDifficulty] = useState('NORMAL');
   const [defeatCount, setDefeatCount] = useState(0);
 
-  // ステータス
   const [playerHp, setPlayerHp] = useState(100);
   const [monsterHp, setMonsterHp] = useState(40);
   const [monsterMaxHp, setMonsterMaxHp] = useState(40);
@@ -101,46 +108,17 @@ export default function Home() {
   const [potions, setPotions] = useState(2);
   const [charge, setCharge] = useState(0);
 
-  // APIキー管理
   const [apiKey, setApiKey] = useState('');
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [inputKey, setInputKey] = useState('');
 
-  // クイズ状態
-  const [quiz, setQuiz] = useState<any>(FALLBACK_QUIZZES.english[0]);
+  const [quiz, setQuiz] = useState<QuizItem>(FALLBACK_QUIZZES.english[0]);
   const [loading, setLoading] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [message, setMessage] = useState('スライムドラゴンが現れた！');
   const [timeLeft, setTimeLeft] = useState(10);
 
-  const timerRef = useRef<any>(null);
-
-  useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key') || '';
-    setApiKey(savedKey);
-    setInputKey(savedKey);
-    fetchNextQuiz(genre, difficulty, savedKey);
-  }, []);
-
-  useEffect(() => {
-    if (loading || selectedOption !== null) return;
-
-    setTimeLeft(10);
-    clearInterval(timerRef.current);
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          handleTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerRef.current);
-  }, [quiz, loading, selectedOption]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchNextQuiz = async (g = genre, d = difficulty, key = apiKey) => {
     setLoading(true);
@@ -152,14 +130,13 @@ export default function Home() {
         body: JSON.stringify({ genre: g, difficulty: d, userApiKey: key }),
       });
       if (!res.ok) throw new Error('API Error');
-      const data = await res.json();
+      const data: QuizItem = await res.json();
       if (data && data.question && Array.isArray(data.options)) {
         setQuiz(data);
       } else {
         throw new Error('Invalid Data');
       }
     } catch {
-      // 通信エラー時やAPIキー未設定時はデモ問題へ自動フォールバック
       const pool = FALLBACK_QUIZZES[g] || FALLBACK_QUIZZES.english;
       const randomQuiz = pool[Math.floor(Math.random() * pool.length)];
       setQuiz(randomQuiz);
@@ -169,12 +146,12 @@ export default function Home() {
     }
   };
 
-  const saveApiKey = () => {
-    localStorage.setItem('gemini_api_key', inputKey.trim());
-    setApiKey(inputKey.trim());
-    setShowKeyModal(false);
-    fetchNextQuiz(genre, difficulty, inputKey.trim());
-  };
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key') || '';
+    setApiKey(savedKey);
+    setInputKey(savedKey);
+    fetchNextQuiz(genre, difficulty, savedKey);
+  }, []);
 
   const handleTimeout = () => {
     playSE('wrong');
@@ -188,9 +165,38 @@ export default function Home() {
     setTimeout(() => fetchNextQuiz(), 1500);
   };
 
+  useEffect(() => {
+    if (loading || selectedOption !== null) return;
+
+    setTimeLeft(10);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          handleTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [quiz, loading, selectedOption]);
+
+  const saveApiKey = () => {
+    localStorage.setItem('gemini_api_key', inputKey.trim());
+    setApiKey(inputKey.trim());
+    setShowKeyModal(false);
+    fetchNextQuiz(genre, difficulty, inputKey.trim());
+  };
+
   const handleSelect = (index: number) => {
     if (selectedOption !== null || loading || !quiz) return;
-    clearInterval(timerRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
     setSelectedOption(index);
 
     if (index === quiz.answerIndex) {
@@ -280,7 +286,6 @@ export default function Home() {
     <main style={{ minHeight: '100vh', backgroundColor: '#020617', color: '#fff', padding: '16px', fontFamily: 'sans-serif', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px', boxSizing: 'border-box', position: 'relative' }}>
         
-        {/* ヘッダー ＆ キー設定ボタン */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <h1 style={{ fontSize: '16px', margin: 0, fontWeight: 'bold', color: '#fbbf24' }}>
             ⚔️ クイズダンジョン Ultimate
@@ -305,7 +310,6 @@ export default function Home() {
           撃破数: <strong style={{ color: '#fbbf24' }}>{defeatCount}</strong>
         </div>
 
-        {/* APIキー設定モーダル */}
         {showKeyModal && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', zIndex: 10 }}>
             <h3 style={{ fontSize: '16px', color: '#fbbf24', marginTop: 0 }}>🔑 Gemini APIキー設定</h3>
@@ -330,7 +334,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* ジャンル選択タブ */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '14px' }}>
           {GENRES.map((g) => (
             <button
@@ -352,7 +355,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 難易度 */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '14px' }}>
           {['EASY', 'NORMAL', 'HARD'].map((d) => (
             <button
@@ -373,7 +375,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* モンスター表示 */}
         <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '12px', textAlign: 'center', marginBottom: '14px' }}>
           <div style={{ fontSize: '40px' }}>🐲</div>
           <div style={{ fontWeight: 'bold', color: '#f87171', fontSize: '14px', marginBottom: '4px' }}>{monsterName}</div>
@@ -383,7 +384,6 @@ export default function Home() {
           <div style={{ fontSize: '11px', color: '#94a3b8' }}>HP: {Math.max(0, monsterHp)} / {monsterMaxHp}</div>
         </div>
 
-        {/* 勇者ステータス & コマンド */}
         <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '12px', marginBottom: '14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
             <span style={{ fontWeight: 'bold', color: '#34d399' }}>🛡️ 勇者</span>
@@ -429,7 +429,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* メッセージ ＆ タイマー */}
         <div style={{ textAlign: 'center', fontSize: '12px', color: '#fde047', marginBottom: '8px', minHeight: '18px' }}>
           {message}
         </div>
@@ -437,7 +436,6 @@ export default function Home() {
           <div style={{ width: `${(timeLeft / 10) * 100}%`, backgroundColor: '#38bdf8', height: '100%', transition: 'all 1s linear' }} />
         </div>
 
-        {/* クイズ表示 */}
         <div style={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', padding: '14px' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: '13px' }}>🧙‍♂️ AIが問題を錬成中...</div>
