@@ -9,40 +9,6 @@ type Quiz = {
   explanation: string;
 };
 
-// APIが上限・エラーの時に使う内蔵クイズ（バックアップ）
-const fallbackQuizzes: Quiz[] = [
-  {
-    question: "「She is ______ about her new job.」空欄に入る言葉は？",
-    options: ["excited", "excite", "exciting", "excitedly"],
-    answerIndex: 0,
-    explanation: "人の感情を表す場合は過去分詞「excited」を使います。"
-  },
-  {
-    question: "「I am looking forward to ______ you.」空欄に入る言葉は？",
-    options: ["see", "seeing", "seen", "saw"],
-    answerIndex: 1,
-    explanation: "look forward to の to は前置詞なので動名詞(ing)が続きます。"
-  },
-  {
-    question: "「Could you ______ me a favor?」空欄に入る言葉は？",
-    options: ["do", "make", "give", "take"],
-    answerIndex: 0,
-    explanation: "「お願いを聞いてくれますか」は do me a favor と言います。"
-  },
-  {
-    question: "「It depends ______ the weather.」空欄に入る言葉は？",
-    options: ["on", "in", "at", "at"],
-    answerIndex: 0,
-    explanation: "depend on ～ で「～次第だ / ～による」という意味になります。"
-  },
-  {
-    question: "「Thank you for ______ me.」空欄に入る言葉は？",
-    options: ["helping", "help", "helped", "helps"],
-    answerIndex: 0,
-    explanation: "前置詞 for の後ろには動名詞(ing)を置きます。"
-  }
-];
-
 export default function Home() {
   const [apiKey, setApiKey] = useState<string>("");
   const [inputKey, setInputKey] = useState<string>("");
@@ -75,11 +41,6 @@ export default function Home() {
     setQuiz(null);
   };
 
-  const getRandomFallbackQuiz = () => {
-    const randomIndex = Math.floor(Math.random() * fallbackQuizzes.length);
-    return fallbackQuizzes[randomIndex];
-  };
-
   const fetchQuiz = async (keyToUse: string) => {
     setLoading(true);
     setMessage("⚡ AIがクイズを生成中…");
@@ -88,9 +49,9 @@ export default function Home() {
 {"question":"問題文","options":["選択肢1","選択肢2","選択肢3","選択肢4"],"answerIndex":0,"explanation":"解説"}`;
 
     try {
-      // 正しいモデル名 gemini-1.5-flash を指定
+      // モデル名を現在動作する gemini-2.0-flash に更新
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${keyToUse}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -104,18 +65,17 @@ export default function Home() {
         }
       );
 
+      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error("APIエラーまたは上限到達");
+        throw new Error(data.error?.message || `エラー: ${res.status}`);
       }
 
-      const data = await res.json();
       const generatedQuiz = JSON.parse(data.candidates[0].content.parts[0].text);
       setQuiz(generatedQuiz);
       setMessage("AIモンスターが現れた！");
-    } catch {
-      // APIエラーや制限時は内蔵クイズに切り替えて継続
-      setQuiz(getRandomFallbackQuiz());
-      setMessage("⚠️ AI上限/通信エラーのため練習問題を出題中！");
+    } catch (err: any) {
+      setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -134,7 +94,7 @@ export default function Home() {
         return;
       }
 
-      setMessage("⭕️ 正解！15ダメージ！次の問題を準備中…");
+      setMessage("⭕️ 正解！15ダメージ！次問題を生成中…");
       fetchQuiz(apiKey);
     } else {
       const nextPlayerHp = Math.max(0, playerHp - 25);
@@ -248,7 +208,7 @@ export default function Home() {
         {gameState === "playing" && (
           <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #334155' }}>
             {loading ? (
-              <p style={{ textAlign: 'center', color: '#94a3b8' }}>⚡ 問題を用意中…</p>
+              <p style={{ textAlign: 'center', color: '#94a3b8' }}>⚡ AIが生成中…</p>
             ) : quiz ? (
               <>
                 <p style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '12px', textAlign: 'center' }}>{quiz.question}</p>
@@ -274,7 +234,14 @@ export default function Home() {
                   ))}
                 </div>
               </>
-            ) : null}
+            ) : (
+              <button
+                onClick={() => fetchQuiz(apiKey)}
+                style={{ width: '100%', padding: '12px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                🔄 再試行する
+              </button>
+            )}
           </div>
         )}
 
