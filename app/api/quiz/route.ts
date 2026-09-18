@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
 
-interface QuizResponse {
-  question: string;
-  options: string[];
-  answerIndex: number;
-}
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { genre, difficulty, userApiKey } = body;
+    const { genre, difficulty, userApiKey } = body || {};
 
     const apiKey = userApiKey || process.env.GEMINI_API_KEY;
 
@@ -53,11 +49,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Empty response' }, { status: 500 });
     }
 
-    const quizData: QuizResponse = JSON.parse(rawText.trim());
-
+    const quizData = JSON.parse(rawText.trim());
     return NextResponse.json(quizData);
-  } catch (error) {
-    console.error('Quiz Route Error:', error);
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
